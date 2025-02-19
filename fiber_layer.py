@@ -503,7 +503,8 @@ class FiberLayer:
 				# add fields
 				pr.addAttributes( [ QgsField("Site ID", QVariant.String),
 								QgsField("Fiber Run",  QVariant.Int),
-								QgsField("Section",  QVariant.Int) ] )
+								QgsField("Section",  QVariant.Int),
+								QgsField("Length", QVariant.Double, "double", 10, 3) ] )
 				
 				#stylize
 				single_symbol_renderer = vl.renderer()
@@ -690,8 +691,15 @@ class FiberLayer:
 		feat.setAttribute("Site ID", siteID)
 		feat.setAttribute("Fiber Run", fiberRun)
 		feat.setAttribute("Section", section)
-
 		feat.setGeometry(QgsGeometry.fromPolylineXY(poleGeo))
+
+		distance = QgsDistanceArea()
+		distance.setEllipsoid('WGS84')
+		geom = feat.geometry()
+		length = distance.measureLine(feat.geometry().asPolyline())
+		print(length)
+		feat.setAttribute("Length", length)
+		
 		fiberLayer.addFeature(feat)
 		fiberLayer.endEditCommand()
 		fiberLayer.commitChanges()
