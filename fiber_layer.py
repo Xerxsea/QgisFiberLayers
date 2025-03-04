@@ -23,6 +23,7 @@
 """
 import sys
 import os
+import processing
 from qgis.core import *
 from PyQt5.QtCore import *
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
@@ -582,10 +583,7 @@ class FiberLayer:
 		vl.setDataSource(Fl_ou, vl.name(), 'ogr')
 	
 	def relabelPoles(self):
-		"""Run method that performs all the real work"""
-
-		# Create the dialog with elements (after translation) and keep reference
-		# Only create GUI ONCE in callback, so that it will only load when the plugin is started
+	
 		if self.first_start == True:
 			self.first_start = False
 		self.dlg = FiberLayerPoles()
@@ -595,7 +593,9 @@ class FiberLayer:
 		for layer in layers:
 			self.dlg.layerComboBox.addItem(layer.name(), layer)
 		
+		self.dlg.directoryButton.clicked.connect(self.getFileName)
 		self.dlg.reorderButton.clicked.connect(self.reorderClicked)
+		self.dlg.reorderIntoNewLayerButton.clicked.connect(self.reorderIntoNewLayer)
 		# show the dialog
 		self.dlg.show()
 		# Run the dialog event loop
@@ -635,6 +635,70 @@ class FiberLayer:
 				poleNumber += 1	 
 		self.dlg.close()
 		
+	def reorderIntoNewLayer(self):
+		layer = self.dlg.layerComboBox.currentData()
+		poleNumber = int(self.dlg.startPole.text())
+		dir = self.dlg.saveDirectoryInput.text()
+		newLayerName = self.dlg.layerName.text()
+		fromPole = int(self.dlg.fromPole.text())
+		toPole = int(self.dlg.toPole.text())
+		
+		fieldName = "Pole #"
+		fid = []
+		poleid = []
+		polenum = []
+		fieldidx = layer.fields().indexFromName(fieldName)
+		for feat in layer.getFeatures():
+			for num in range(fromPole, toPole):
+				if num < 10 :
+					poleName = "P00" + str(num)
+				elif num >9 and num < 100 :
+					poleName = "P0" + str(num)
+				elif num >= 100 :
+					poleName = "P" + str(num)
+					
+				if poleName == feat.attributes()[0] :
+					fid.append(feat.id())
+			
+		layer.selectByIds(fid)	
+
+		newLayer = layer.materialize(QgsFeatureRequest().setFilterFids(layer.selectedFeatureIds()))
+		newLayer.setName(newLayerName)
+	
+		QgsProject.instance().addMapLayer(newLayer)
+		layer.removeSelection()
+		
+		Fl_ou = newLayerName + '.shp'
+		Fl_ou = dir + '/' + Fl_ou
+		options = QgsVectorFileWriter.SaveVectorOptions()
+		options.driverName = "ESRI Shapefile"
+
+		QgsVectorFileWriter.writeAsVectorFormatV3(newLayer, Fl_ou, QgsCoordinateTransformContext(), options)
+		newLayer.setDataSource(Fl_ou, newLayer.name(), 'ogr')
+		
+		fid = []
+		for feat in newLayer.getFeatures():
+			fid.append(feat.id())
+			polenum.append(feat.attributes()[0])
+			poleid.append(feat.attributes()[1])
+		   
+		polenumsorted = sorted(polenum)
+						
+		with edit(newLayer):
+			for pole in polenumsorted:
+				index = polenum.index(pole)
+				featid = fid[index]
+				if poleNumber < 10 :
+					newPoleName = "P00" + str(poleNumber)
+				elif poleNumber > 9 and poleNumber < 100:
+					newPoleName = "P0" + str(poleNumber)
+				elif poleNumber >= 100 :
+					newPoleName = "P" + str(poleNumber)
+				newLayer.changeAttributeValue(featid, fieldidx, newPoleName)
+				print(featid, fieldidx, newPoleName)
+				poleNumber += 1	 
+		self.dlg.close()
+			
 	def drawFiber(self):
 	
 		if self.first_start == True:
@@ -659,7 +723,8 @@ class FiberLayer:
 			# Do something useful here - delete the line containing pass and
 			# substitute with your code.
 			pass
-		 
+	
+
 	def drawClicked(self):
 		
 		fiberLayer = self.dlg.fiberComboBox.currentData()
