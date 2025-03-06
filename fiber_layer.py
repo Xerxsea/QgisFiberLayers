@@ -29,6 +29,7 @@ from PyQt5.QtCore import *
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import QAction, QFileDialog
+from random import randrange
 
 
 # Initialize Qt resources from file resources.py
@@ -37,6 +38,7 @@ from .resources import *
 from .fiber_layer_dialog import FiberLayerDialog
 from .fiber_layer_poles import FiberLayerPoles
 from .fiber_layer_drawFiber import FiberLayerDrawFiber
+from .fiber_layer_addFiberLayer import AddFiberLayer
 import os.path
 
 
@@ -171,7 +173,7 @@ class FiberLayer:
 		icon_path = ':/plugins/fiber_layer/icon.png'
 		self.add_action(
 			icon_path,
-			text=self.tr(u'Create Fiber Layer'),
+			text=self.tr(u'Create Fiber Project'),
 			callback=self.run,
 			parent=self.iface.mainWindow())
 			
@@ -183,10 +185,18 @@ class FiberLayer:
 			parent=self.iface.mainWindow(),
 			add_to_toolbar=True)
 		icon_path = ':/plugins/fiber_layer/icon.png'
+		
 		self.add_action(
 			icon_path,
 			text=self.tr(u'Draw Fiber'),
 			callback=self.drawFiber,
+			parent=self.iface.mainWindow(),
+			add_to_toolbar=True)
+			
+		self.add_action(
+			icon_path,
+			text=self.tr(u'Add Fiber Layer'),
+			callback=self.addFiberLayer,
 			parent=self.iface.mainWindow(),
 			add_to_toolbar=True)
 
@@ -203,6 +213,11 @@ class FiberLayer:
 			self.iface.removeToolBarIcon(action)
 
 
+
+	#-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------		
+	
+	
+	
 	def run(self):
 		"""Run method that performs all the real work"""
 
@@ -581,6 +596,13 @@ class FiberLayer:
 
 		QgsVectorFileWriter.writeAsVectorFormatV3(vl, Fl_ou, QgsCoordinateTransformContext(), options)
 		vl.setDataSource(Fl_ou, vl.name(), 'ogr')
+		
+		
+		
+	#-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------		
+	
+	
+	
 	
 	def relabelPoles(self):
 	
@@ -698,7 +720,13 @@ class FiberLayer:
 				print(featid, fieldidx, newPoleName)
 				poleNumber += 1	 
 		self.dlg.close()
-			
+		
+		
+		
+	#-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------		
+	
+	
+	
 	def drawFiber(self):
 	
 		if self.first_start == True:
@@ -770,10 +798,120 @@ class FiberLayer:
 		fiberLayer.commitChanges()
 		
 		self.dlg.close()
+	#-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------			
 		
+	def addFiberLayer(self):
 		
+		if self.first_start == True:
+			self.first_start = False
+		self.dlg = AddFiberLayer()
 		
+		#events go here
 		
+		self.dlg.chooseFileButton.clicked.connect(self.getFileName)
+		self.dlg.generateButton.clicked.connect(self.onGenerateClicked)
+		
+		# show the dialog
+		self.dlg.show()
+		# Run the dialog event loop
+		result = self.dlg.exec_()
+		# See if OK was pressed
+		if result:
+			# Do something useful here - delete the line containing pass and
+			# substitute with your code.
+			pass
+		
+	def onGenerateClicked(self):
+		
+		dir = self.dlg.saveDirectoryInput.text()
+		rootFolder = self.dlg.rootFolder.text()
+		fiberRun = self.dlg.fiberRun.text()
+		layerName = self.dlg.layerName.text()
+		
+		root = QgsProject.instance().layerTreeRoot()
+		groupFound = False;
+		subGroupFound = False;
+		#check for group and subgroup and if not exist create it.
+		for child in root.children():
+			if child.name() == rootFolder:
+				groupFound = True
+				group = child
+				for subChild in child.children():
+					if subChild.name() == fiberRun:
+						# both group and subgroup exist
+						subGroupFound = True
+						fiberRunGroup = subChild
+
+		if groupFound == False :
+			#group does not exist, create group and subgroup
+			group = root.addGroup(rootFolder)
+			fiberRunGroup = group.addGroup(fiberRun)
+		if groupFound == True and subGroupFound == False :
+			fiberRunGroup = group.addGroup(fiberRun)
+			
+		layer = QgsVectorLayer("MultiPolygon", layerName, "memory")
+		pr = layer.dataProvider()
+		# Enter editing mode
+		layer.startEditing()
+		# add fields
+		pr.addAttributes( [ QgsField("Site ID", QVariant.String),
+						QgsField("Trunk Tube",  QVariant.String),
+						QgsField("Trunk Core",	QVariant.String),
+						QgsField("Fiber Run",  QVariant.Int),
+						QgsField("Sections",  QVariant.Int) ] )
+						
+	
+		fields = layer.fields()
+		fni = fields.indexFromName('Trunk Core')
+		unique_values = layer.dataProvider().uniqueValues(fni)
+		
+		colors = [(214,222,243), (29,180,225), (116,185,160), (29,179,141), (116,21,160), (1,0,255), (359,226,227), (1,0,0), (63,181,253), (269,255,255), (349,63,255), (180,255, 255)]
+		colorNames = ['Blue', 'Orange', 'Green', 'Brown', 'Grey','White', 'Red','Black', 'Yellow', 'Violet', 'Pink', 'Aqua' ]
+		categories = []
+		for idx, color in enumerate(colors):
+			(h,s,v) = color 
+			# initialize the default symbol for this geometry type
+			symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+			
+			# configure a symbol layer
+			layer_style = {}
+			layer_style['color'] = QColor.fromHsv(h, s, v)
+			layer_style['outline'] = '#000000'
+			symbol_layer = QgsSimpleFillSymbolLayer.create(layer_style)
+
+			# replace default symbol layer with the configured one
+			if symbol_layer is not None:
+				symbol.changeSymbolLayer(0, symbol_layer)
+
+			# create renderer object
+			category = QgsRendererCategory(colorNames[idx], symbol, str(colorNames[idx]) + ' Core')
+			# entry for the list of category items
+			categories.append(category)
+	
+		renderer = QgsCategorizedSymbolRenderer('Trunk Core', categories)
+
+		# assign the created renderer to the layer
+		if renderer is not None:
+			layer.setRenderer(renderer)
+
+		layer.triggerRepaint()
+		
+		# Commit changes
+		layer.commitChanges()
+		# Show in project
+		QgsProject.instance().addMapLayer(layer, False)
+		fiberRunGroup.addLayer(layer)
+		
+		Fl_ou = layerName + '.shp'
+		Fl_ou = dir + '/' + Fl_ou
+		
+		options = QgsVectorFileWriter.SaveVectorOptions()
+		options.driverName = "ESRI Shapefile"
+
+		QgsVectorFileWriter.writeAsVectorFormatV3(layer, Fl_ou, QgsCoordinateTransformContext(), options)
+		layer.setDataSource(Fl_ou, layer.name(), 'ogr')
+		
+		self.dlg.close()
 		
 		
 		

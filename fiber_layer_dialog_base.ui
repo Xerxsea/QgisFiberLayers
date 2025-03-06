@@ -31,7 +31,7 @@
     <rect>
      <x>50</x>
      <y>10</y>
-     <width>171</width>
+     <width>211</width>
      <height>41</height>
     </rect>
    </property>
@@ -42,7 +42,7 @@
     </font>
    </property>
    <property name="text">
-    <string>Create Fiber Layers</string>
+    <string>Generate Fiber Project</string>
    </property>
   </widget>
   <widget class="QLineEdit" name="saveDirectoryInput">
