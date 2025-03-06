@@ -893,7 +893,7 @@ class FiberLayer:
 			
 			# configure a symbol layer
 			layer_style = {}
-			layer_style['color'] = QColor.fromHsv(h, s, v)
+			layer_style['color'] = QColor.fromHsv(h, s, v, 153)
 			layer_style['outline'] = '#000000'
 			symbol_layer = QgsSimpleFillSymbolLayer.create(layer_style)
 
