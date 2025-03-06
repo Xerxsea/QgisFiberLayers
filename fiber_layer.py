@@ -846,15 +846,9 @@ class FiberLayer:
 							if sub2Child.name() == fiberRun:
 								# all group layers exist
 								subGroupFound = True
-								print(sub2Child.children())
-								if sub2Child.children() == [] :
-									# Vector Layer doesnt exist
-									fiberRunGroup = sub2Child
-									print('all group layers exist')
-								else :
-									print('Attempting to override layer')
-									self.dlg.close()
-									return
+								# Vector Layer doesnt exist
+								fiberRunGroup = sub2Child
+								print('all group layers exist')
 
 
 		if rootGroupFound == False : 
