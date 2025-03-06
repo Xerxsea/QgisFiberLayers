@@ -825,29 +825,53 @@ class FiberLayer:
 		
 		dir = self.dlg.saveDirectoryInput.text()
 		rootFolder = self.dlg.rootFolder.text()
+		fiberType = self.dlg.fiberType.text()
 		fiberRun = self.dlg.fiberRun.text()
 		layerName = self.dlg.layerName.text()
 		
 		root = QgsProject.instance().layerTreeRoot()
-		groupFound = False;
-		subGroupFound = False;
-		#check for group and subgroup and if not exist create it.
+		rootGroupFound = False
+		groupFound = False
+		subGroupFound = False
+		#check for group and subgroup and sub-subgroup and if not exist create it.
 		for child in root.children():
 			if child.name() == rootFolder:
-				groupFound = True
-				group = child
-				for subChild in child.children():
-					if subChild.name() == fiberRun:
-						# both group and subgroup exist
-						subGroupFound = True
-						fiberRunGroup = subChild
+				rootGroupFound = True
+				rootGroup = child
+				for subChild in rootGroup.children():
+					if subChild.name() == fiberType:
+						groupFound = True
+						group = subChild
+						for sub2Child in subChild.children():
+							if sub2Child.name() == fiberRun:
+								# all group layers exist
+								subGroupFound = True
+								print(sub2Child.children())
+								if sub2Child.children() == [] :
+									# Vector Layer doesnt exist
+									fiberRunGroup = sub2Child
+									print('all group layers exist')
+								else :
+									print('Attempting to override layer')
+									self.dlg.close()
+									return
 
-		if groupFound == False :
+
+		if rootGroupFound == False : 
+			rootGroup = root.addGroup(rootFolder)
+			group = rootGroup.addGroup(fiberType)
+			fiberRunGroup = group.addGroup(fiberRun)
+			print('no group layers exist')
+			
+		if groupFound == False and rootGroupFound == True :
 			#group does not exist, create group and subgroup
-			group = root.addGroup(rootFolder)
+			group = rootGroup.addGroup(fiberType)
 			fiberRunGroup = group.addGroup(fiberRun)
-		if groupFound == True and subGroupFound == False :
+			print('group layer doesnt exist')
+			
+		if 	subGroupFound == False and groupFound == True and rootGroupFound == True :
 			fiberRunGroup = group.addGroup(fiberRun)
+			print('sub group layers doesnt exist')
 			
 		layer = QgsVectorLayer("MultiPolygon", layerName, "memory")
 		pr = layer.dataProvider()
