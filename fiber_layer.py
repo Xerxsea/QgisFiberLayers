@@ -829,6 +829,18 @@ class FiberLayer:
 		fiberRun = self.dlg.fiberRun.text()
 		layerName = self.dlg.layerName.text()
 		
+		if self.dlg.trunkCheck.isChecked() and self.dlg.distCheck.isChecked():
+			return
+			
+		if self.dlg.trunkCheck.isChecked():
+			self.createTrunkLayer(dir, rootFolder, fiberType, fiberRun, layerName)
+			
+		if self.dlg.distCheck.isChecked():
+			self.createDistLayer(dir, rootFolder, fiberType, fiberRun, layerName)
+		
+		self.dlg.close()
+		
+	def createTrunkLayer(self, dir, rootFolder, fiberType, fiberRun, layerName):
 		root = QgsProject.instance().layerTreeRoot()
 		rootGroupFound = False
 		groupFound = False
@@ -865,7 +877,7 @@ class FiberLayer:
 			
 		if 	subGroupFound == False and groupFound == True and rootGroupFound == True :
 			fiberRunGroup = group.addGroup(fiberRun)
-			print('sub group layers doesnt exist')
+			print('sub group layer doesnt exist')
 			
 		layer = QgsVectorLayer("MultiPolygon", layerName, "memory")
 		pr = layer.dataProvider()
@@ -929,11 +941,114 @@ class FiberLayer:
 		QgsVectorFileWriter.writeAsVectorFormatV3(layer, Fl_ou, QgsCoordinateTransformContext(), options)
 		layer.setDataSource(Fl_ou, layer.name(), 'ogr')
 		
-		self.dlg.close()
+	def createDistLayer(self, dir, rootFolder, fiberType, fiberRun, layerName):
 		
+		root = QgsProject.instance().layerTreeRoot()
+		rootGroupFound = False
+		groupFound = False
+		subGroupFound = False
+		#check for group and subgroup and sub-subgroup and if not exist create it.
+		for child in root.children():
+			if child.name() == rootFolder:
+				rootGroupFound = True
+				rootGroup = child
+				for subChild in rootGroup.children():
+					if subChild.name() == fiberType:
+						groupFound = True
+						group = subChild
+						for sub2Child in subChild.children():
+							if sub2Child.name() == fiberRun:
+								# all group layers exist
+								subGroupFound = True
+								# Vector Layer doesnt exist
+								fiberRunGroup = sub2Child
+								print('all group layers exist')
+
+
+		if rootGroupFound == False : 
+			rootGroup = root.addGroup(rootFolder)
+			group = rootGroup.addGroup(fiberType)
+			fiberRunGroup = group.addGroup(fiberRun)
+			print('no group layers exist')
+			
+		if groupFound == False and rootGroupFound == True :
+			#group does not exist, create group and subgroup
+			group = rootGroup.addGroup(fiberType)
+			fiberRunGroup = group.addGroup(fiberRun)
+			print('group layer doesnt exist')
+			
+		if 	subGroupFound == False and groupFound == True and rootGroupFound == True :
+			fiberRunGroup = group.addGroup(fiberRun)
+			print('sub group layer doesnt exist')
+			
+		layer = QgsVectorLayer("LineString", layerName, "memory")
+		pr = layer.dataProvider()
+		# Enter editing mode
+		layer.startEditing()
+		# add fields
+		pr.addAttributes( [ QgsField("Site ID", QVariant.String),
+						QgsField("Address",  QVariant.String),
+						QgsField("First Name",  QVariant.String),
+						QgsField("Last Name",  QVariant.String),
+						QgsField("Pole #",  QVariant.String),
+						QgsField("D-Box ID",  QVariant.String),
+						QgsField("Trunk Tube",	QVariant.String),
+						QgsField("Trunk Core",	QVariant.String),
+						QgsField("Dist Tube",  QVariant.String),
+						QgsField("Dist Core",  QVariant.String),
+						QgsField("Fiber Run",  QVariant.Int),
+						QgsField("Sections",  QVariant.Int) ] )
+						
+	
+		fields = layer.fields()
+		fni = fields.indexFromName('Dist Core')
+		unique_values = layer.dataProvider().uniqueValues(fni)
 		
+		colors = [(214,222,243), (29,180,225), (116,185,160), (29,179,141), (116,21,160), (1,0,255), (359,226,227), (1,0,0), (63,181,253), (269,255,255), (349,63,255), (180,255, 255)]
+		colorNames = ['Blue', 'Orange', 'Green', 'Brown', 'Grey','White', 'Red','Black', 'Yellow', 'Violet', 'Pink', 'Aqua' ]
+		categories = []
+		for idx, color in enumerate(colors):
+			(h,s,v) = color 
+			# initialize the default symbol for this geometry type
+			symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+			
+			# configure a symbol layer
+			layer_style = {}
+			layer_style['color'] = QColor.fromHsv(h, s, v, 255)
+			layer_style['width'] = 1.2
+			symbol_layer = QgsSimpleLineSymbolLayer.create(layer_style)
+
+			# replace default symbol layer with the configured one
+			if symbol_layer is not None:
+				
+				symbol.changeSymbolLayer(0, symbol_layer)
+			# create renderer object
+			category = QgsRendererCategory(colorNames[idx], symbol, str(colorNames[idx]) + ' Core')
+			# entry for the list of category items
+			categories.append(category)
+	
+		renderer = QgsCategorizedSymbolRenderer('Dist Core', categories)
+
+		# assign the created renderer to the layer
+		if renderer is not None:
+			layer.setRenderer(renderer)
+
+		layer.triggerRepaint()
 		
+		# Commit changes
+		layer.commitChanges()
+		# Show in project
+		QgsProject.instance().addMapLayer(layer, False)
+		fiberRunGroup.addLayer(layer)
 		
+		Fl_ou = layerName + '.shp'
+		Fl_ou = dir + '/' + Fl_ou
+		
+		options = QgsVectorFileWriter.SaveVectorOptions()
+		options.driverName = "ESRI Shapefile"
+
+		QgsVectorFileWriter.writeAsVectorFormatV3(layer, Fl_ou, QgsCoordinateTransformContext(), options)
+		layer.setDataSource(Fl_ou, layer.name(), 'ogr')
 		
 		
 		
